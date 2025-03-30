@@ -1,0 +1,293 @@
+version: '3.8'
+
+services:
+  x-kafka-common:
+    &kafka-common
+    image: bitnami/kafka:3.7
+    environment:
+      &kafka-common-env
+      TZ: Europe/Moscow
+      KAFKA_ENABLE_KRAFT: yes
+      ALLOW_PLAINTEXT_LISTENER: yes
+      KAFKA_KRAFT_CLUSTER_ID: practicum
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
+    networks:
+      - proxynet
+
+  kafka-1-0:
+    <<: *kafka-common
+    restart: always
+    ports:
+      - "127.0.0.1:9094:9094"
+    environment:
+      <<: *kafka-common-env
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1-0:9092,EXTERNAL://127.0.0.1:9094
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka-1-0:9093,1@kafka-1-1:9093,2@kafka-1-2:9093
+
+  kafka-1-1:
+    <<: *kafka-common
+    restart: always
+    ports:
+      - "127.0.0.1:9095:9095"
+    environment:
+      <<: *kafka-common-env
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9095
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1-1:9092,EXTERNAL://127.0.0.1:9095
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka-1-0:9093,1@kafka-1-1:9093,2@kafka-1-2:9093
+
+  kafka-1-2:
+    <<: *kafka-common
+    restart: always
+    ports:
+      - "127.0.0.1:9096:9096"
+    environment:
+      <<: *kafka-common-env
+      KAFKA_CFG_NODE_ID: 2
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9096
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka-1-2:9092,EXTERNAL://127.0.0.1:9096
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka-1-0:9093,1@kafka-1-1:9093,2@kafka-1-2:9093
+
+  kafka-2-0:
+    <<: *kafka-common
+    restart: always
+    ports:
+      - "127.0.0.1:9097:9097"
+    environment:
+      <<: *kafka-common-env
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9097
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2-0:9092,EXTERNAL://127.0.0.1:9097
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka-2-0:9093,1@kafka-2-1:9093,2@kafka-2-2:9093
+
+  kafka-2-1:
+    <<: *kafka-common
+    restart: always
+    ports:
+      - "127.0.0.1:9098:9098"
+    environment:
+      <<: *kafka-common-env
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9098
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2-1:9092,EXTERNAL://127.0.0.1:9098
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka-2-0:9093,1@kafka-2-1:9093,2@kafka-2-2:9093
+
+  kafka-2-2:
+    <<: *kafka-common
+    restart: always
+    ports:
+      - "127.0.0.1:9099:9099"
+    environment:
+      <<: *kafka-common-env
+      KAFKA_CFG_NODE_ID: 2
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9099
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka-2-2:9092,EXTERNAL://127.0.0.1:9099
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka-2-0:9093,1@kafka-2-1:9093,2@kafka-2-2:9093
+
+  ksqldb-server:
+    image: confluentinc/ksqldb-server:latest
+    depends_on:
+      - kafka-2-0
+      - kafka-2-1
+      - kafka-2-2
+    environment:
+      - KSQL_BOOTSTRAP_SERVERS=kafka-2-0:9092;kafka-2-1:9092;kafka-2-2:9092
+    ports:
+      - "8088:8088"
+    networks:
+      - proxynet
+
+  kafka-connect:
+    build:
+      context: ./infra/kafka-connect
+    ports:
+      - "8083:8083"
+      - "9875:9875"
+      - "9876:9876"
+      - "8095:8095"
+    depends_on:
+      - kafka-1-0
+      - kafka-1-1
+      - kafka-1-2
+    environment:
+      TZ: Europe/Moscow
+      CONNECT_BOOTSTRAP_SERVERS: kafka-1-0:9092
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: 'kafka-connect'
+      CONNECT_REST_ADVERTISED_HOST_NAME: 'localhost'
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_CONFIG_STORAGE_TOPIC: 'connect-config-storage'
+      CONNECT_OFFSET_STORAGE_TOPIC: 'connect-offset-storage'
+      CONNECT_STATUS_STORAGE_TOPIC: 'connect-status-storage'
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      KAFKA_JMX_PORT: '9875'
+      KAFKA_OPTS: "-javaagent:/opt/jmx_prometheus_javaagent-0.15.0.jar=9876:/opt/kafka-connect.yml"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
+      CONNECT_CONFIG_PROVIDERS: "file"
+      CONNECT_CONFIG_PROVIDERS_FILE_CLASS: "org.apache.kafka.common.config.provider.FileConfigProvider"
+      CONNECT_PLUGIN_PATH: /usr/share/java,/etc/kafka-connect/jars
+    volumes:
+      - ./infra/confluent-hub-components/:/etc/kafka-connect/jars
+    networks:
+      - proxynet
+
+  ui:
+    image: provectuslabs/kafka-ui:v0.7.0
+    restart: always
+    ports:
+      - "8085:8080"
+    environment:
+      TZ: Europe/Moscow
+      KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS: kafka-1-0:9092
+      KAFKA_CLUSTERS_0_NAME: cluster-1
+      KAFKA_CLUSTERS_1_BOOTSTRAP_SERVERS: kafka-2-0:9092
+      KAFKA_CLUSTERS_1_NAME: cluster-2
+      KAFKA_CLUSTERS_1_KSQLDBSERVER: http://ksqldb-server:8088
+    networks:
+      - proxynet
+
+  hadoop-namenode:
+    image: apache/hadoop:3.4.1
+    container_name: hadoop-namenode
+    hostname: hadoop-namenode
+    user: "root"
+    restart: always
+    platform: linux/amd64
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "2g"
+    shm_size: 10G
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - ./infra/hdfs/config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./infra/hdfs/config/hdfs-site-namenode.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./infra/hdfs/namenode_entrypoint.sh:/namenode_entrypoint.sh
+    entrypoint: ["/bin/bash", "/namenode_entrypoint.sh"]
+    command: ["hdfs", "namenode"]
+    networks:
+      - proxynet
+
+  hadoop-datanode-1:
+    image: apache/hadoop:3.4.1
+    container_name: hadoop-datanode-1
+    hostname: localhost
+    user: "root"
+    restart: always
+    platform: linux/amd64
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "2g"
+    shm_size: 10G
+    depends_on:
+      - hadoop-namenode
+    ports:
+      - "9864:9864"
+      - "9970:9970"
+    volumes:
+      - ./infra/hdfs/config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./infra/hdfs/config/hdfs-site-datanode-1.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./infra/hdfs/datanode_entrypoint.sh:/datanode_entrypoint.sh
+    entrypoint: [ "/bin/bash", "/datanode_entrypoint.sh" ]
+    command: [ "hdfs", "datanode" ]
+    networks:
+      - proxynet
+
+  hadoop-datanode-2:
+    image: apache/hadoop:3.4.1
+    container_name: hadoop-datanode-2
+    hostname: localhost
+    user: "root"
+    restart: always
+    platform: linux/amd64
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "2g"
+    shm_size: 10G
+    depends_on:
+      - hadoop-namenode
+    ports:
+      - "9865:9865"
+      - "9971:9971"
+    volumes:
+      - ./infra/hdfs/config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+      - ./infra/hdfs/config/hdfs-site-datanode-2.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+      - ./infra/hdfs/datanode_entrypoint.sh:/datanode_entrypoint.sh
+    entrypoint: ["/bin/bash", "/datanode_entrypoint.sh"]
+    command: ["hdfs", "datanode"]
+    networks:
+      - proxynet
+
+  hadoop-datanode-3:
+      image: apache/hadoop:3.4.1
+      container_name: hadoop-datanode-3
+      hostname: localhost
+      user: "root"
+      restart: always
+      platform: linux/amd64
+      deploy:
+        resources:
+          limits:
+            cpus: "1.0"
+            memory: "2g"
+      shm_size: 10G
+      depends_on:
+        - hadoop-namenode
+      ports:
+        - "9866:9866"
+        - "9972:9972"
+      volumes:
+        - ./infra/hdfs/config/core-site.xml:/opt/hadoop/etc/hadoop/core-site.xml
+        - ./infra/hdfs/config/hdfs-site-datanode-3.xml:/opt/hadoop/etc/hadoop/hdfs-site.xml
+        - ./infra/hdfs/datanode_entrypoint.sh:/datanode_entrypoint.sh
+      entrypoint: [ "/bin/bash", "/datanode_entrypoint.sh" ]
+      command: [ "hdfs", "datanode" ]
+      networks:
+        - proxynet
+
+  analytics:
+    build: ./analytics
+    networks:
+      - proxynet
+
+  prometheus:
+    image: prom/prometheus:v2.30.3
+    ports:
+      - "9090:9090"
+    environment:
+      TZ: Europe/Moscow
+    volumes:
+      - ./infra/prometheus:/etc/prometheus
+    command: --web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml
+    networks:
+      - proxynet
+
+  grafana:
+    build:
+      context: ./infra/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - proxynet
+    environment:
+      TZ: Europe/Moscow
+
+networks:
+  proxynet:
