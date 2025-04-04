@@ -138,6 +138,7 @@ services:
       CONNECT_PLUGIN_PATH: /usr/share/java,/etc/kafka-connect/jars
     volumes:
       - ./infra/confluent-hub-components/:/etc/kafka-connect/jars
+      - ./infra/data/:/data
     networks:
       - proxynet
 

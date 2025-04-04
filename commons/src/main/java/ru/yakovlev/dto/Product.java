@@ -11,7 +11,6 @@ import java.util.Map;
 
 @Getter
 @Setter
-@ToString
 public class Product {
     @JsonProperty("product_id")
     private String productId;

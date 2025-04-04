@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Коннектор для записи в файл
 curl -X PUT http://localhost:8083/connectors/file-stream-sink/config \
   -H "Content-Type: application/json" \
   --data '{
@@ -11,7 +12,7 @@ curl -X PUT http://localhost:8083/connectors/file-stream-sink/config \
     "value.converter": "org.apache.kafka.connect.storage.StringConverter"
     }' | jq
 
-
+# Коннектор для записи в HDFS
 curl -X PUT http://localhost:8083/connectors/hdfs/config \
   -H "Content-Type: application/json" \
   --data '{
@@ -28,6 +29,7 @@ curl -X PUT http://localhost:8083/connectors/hdfs/config \
     "confluent.topic.replication.factor": "1"
     }' | jq
 
+# Коннектор для зеркалирования кластера
 curl -X PUT http://localhost:8083/connectors/mirror2/config \
   -H "Content-Type: application/json" \
   --data '{
